@@ -93,6 +93,20 @@ def url_to_image(url):
     return image
 
 
+def dict2list(d):
+    """
+    字典转化为列表
+    :param d:
+    :return:
+    """
+    a = []
+    for key, value in d.iteritems():
+        if (type(value) is dict):
+            value = dict2list(value)
+        a.append([key, value])
+    return a
+
+
 # 6人
 # url = 'https://github.com/deepinsight/insightface/blob/master/sample-images/t1.jpg?raw=true'
 # 41人
@@ -117,6 +131,12 @@ model.prepare(ctx_id=ctx_id, nms=0.4)
 """
     4 加载图片文件夹到模型,并且循环打印结果
 """
+# 视频内人脸去重后结果 2020-02-20 houjingru@semptian.com
+video_faces_result = []
+video_faces_no_repeat = []
+face_counts = []
+face_counts_result = []
+
 x = 0
 # os.walk()返回结果：文件夹根路径dir_path, 文件夹名称dir_names, 文件名称file_names
 for root, dirs, frames in os.walk("C:/Users/user/PycharmProjects/PersonHJR/Resource/Video_frames"):
@@ -160,55 +180,116 @@ for root, dirs, frames in os.walk("C:/Users/user/PycharmProjects/PersonHJR/Resou
             # face_meta_data = json.dumps(dict_face_meta)
             # indent=8 缩进，ensure_ascii=False不使用ascii编码，即可以显示中文内容
             face_meta_data = json.dumps(dict_face_meta, indent=8, ensure_ascii=False)
-            print(face_meta_data)
             with open("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", "w", encoding="utf-8") as f:
                 f.write(face_meta_data)
+            # 如果视频人脸集合不为空，则计算相似度，更新视频人脸集合
+            obj1_face_embedding = face.embedding
+            # 如果该字典不为空
+            if video_faces_result:
+                for faceid, face_dict in enumerate(video_faces_result):
+                    video_faces_result_tmp = []
+                    faces_embedding = face_dict['embedding']
+                    obj2_face_embedding_float = []
+                    for index, value in enumerate(faces_embedding.strip('[]').split()):
+                        # embedding的每个值由str转化为float
+                        item_float = float(value)
+                        obj2_face_embedding_float.append(item_float)
+                    obj2_face_embedding = obj2_face_embedding_float
+                    # 计算相似度
+                    from numpy.linalg import norm
 
-            # save_face_meta_data_json("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", dict_face_meta)
+                    sim = np.dot(obj1_face_embedding, obj2_face_embedding) / (
+                                norm(obj1_face_embedding) * norm(obj2_face_embedding))
+                    print(sim)
+                    if sim < 0.1:
+                        # 如果小于0.5，说明不是同一个人，则需要追加此人到video_faces_result
+                        # 判断video_faces_result里面是否已经有该face
+                        for x in video_faces_result:
+                            video_faces_result_tmp = []
+                            if x not in video_faces_result_tmp:
+                                video_faces_result_tmp.append(dict_face_meta)
+                        # video_faces_result_tmp.append(dict_face_meta)
+                    else:
+                        # 如果大于0.5，说明是同一个人，则不需要更新video_faces_result，对同一个人进行统计
+                        face_counts.append(dict_face_meta)
+                video_faces_result.extend(video_faces_result_tmp)
 
-            # 保存每一个人脸元数据为单个文件
-            # 优化部分：将人脸的属性数据转化为str，计算相似度的时候会不会有影响？
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
-            #                              "face_id:" + frame.split('.')[0] + "_" + "face" + str(idx) + "\n" +
-            #                              "age:" + str(face.age) + "\n" +
-            #                              "gender:" + str(face.gender) + "\n" +
-            #                              "bbox:" + str(face.bbox.astype(np.float).flatten()) + "\n" +
-            #                              "landmark:" + "\n" + str(face.landmark.astype(np.float).flatten()) + "\n" +
-            #                              "det_score:" + str(face.det_score) + "\n" +
-            #                              "embedding:" + "\n" + str(face.embedding) + "\n" +
-            #                              "embedding_shape:" + str(face.embedding.shape) + "\n" +
-            #                              "embedding_norm:" + str(face.embedding_norm) + "\n" +
-            #                              "normed_embedding:" + "\n" + str(face.normed_embedding))
+            # 如果视频人脸集合为空，直接将face0添加进去
+            else:
+                video_faces_result.append(dict_face_meta)
+                # print("Video{}".format(video_faces_result))
+print("********************************************最终的人物统计结果***************************************************")
+# video_faces = []
+# for i in video_faces_result:
+#     if i not in video_faces:
+#         video_faces.append(i)
+# print(*video_faces, sep='\n')
+print(*video_faces_result, sep='\n')
 
-            # save_face_meta_data_json("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", face)
+video_faces_result_json = json.dumps(video_faces_result, indent=8, ensure_ascii=False)
+with open("Video_faces_result.json", "w", encoding="utf-8") as f:
+    f.write(video_faces_result_json)
 
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(idx))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face.age))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face.gender))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face.det_score))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
-            #                              str(face.embedding.shape))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
-            #                              str(face.embedding_norm))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
-            #                              str(face.normed_embedding))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
-            #                              str(face.bbox.astype(np.int).flatten()))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
-            #                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
-            #                              str(face.landmark.astype(np.int).flatten()))
+# face_meta_data = json.dumps(dict_face_meta, indent=8, ensure_ascii=False)
+#             with open("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", "w", encoding="utf-8") as f:
+#                 f.write(face_meta_data)
+# print("********************************************最终的人物出现次数结果***********************************************")
+# for i in face_counts:
+#     if i not in face_counts_result:
+#         face_counts_result.append(i)
+# print(*face_counts_result, sep='\n')
 
-            # save_face_metadata("sorted_sim/" + "face" + str(idx) + ".txt", str(face))
-            # save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face))
+# label1 = face_meta_data_list[0]['embedding'].strip('[]').split()
+# face_embedding_idx_float1 = []
+# for index, value in enumerate(label1):
+#     item_float1 = float(value)
+#     face_embedding_idx_float1.append(item_float1)
+
+# save_face_meta_data_json("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", dict_face_meta)
+
+# 保存每一个人脸元数据为单个文件
+# 优化部分：将人脸的属性数据转化为str，计算相似度的时候会不会有影响？
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
+#                              "face_id:" + frame.split('.')[0] + "_" + "face" + str(idx) + "\n" +
+#                              "age:" + str(face.age) + "\n" +
+#                              "gender:" + str(face.gender) + "\n" +
+#                              "bbox:" + str(face.bbox.astype(np.float).flatten()) + "\n" +
+#                              "landmark:" + "\n" + str(face.landmark.astype(np.float).flatten()) + "\n" +
+#                              "det_score:" + str(face.det_score) + "\n" +
+#                              "embedding:" + "\n" + str(face.embedding) + "\n" +
+#                              "embedding_shape:" + str(face.embedding.shape) + "\n" +
+#                              "embedding_norm:" + str(face.embedding_norm) + "\n" +
+#                              "normed_embedding:" + "\n" + str(face.normed_embedding))
+
+# save_face_meta_data_json("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", face)
+
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(idx))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face.age))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face.gender))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face.det_score))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
+#                              str(face.embedding.shape))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
+#                              str(face.embedding_norm))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
+#                              str(face.normed_embedding))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
+#                              str(face.bbox.astype(np.int).flatten()))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" +
+#                              frame.split('.')[0] + "_" + "face" + str(idx) + ".txt",
+#                              str(face.landmark.astype(np.int).flatten()))
+
+# save_face_metadata("sorted_sim/" + "face" + str(idx) + ".txt", str(face))
+# save_face_meta_data_standard("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".txt", str(face))
 
 
 # """
