@@ -8,7 +8,6 @@ import numpy as np
 import struct
 import os
 import json
-import pickle
 
 """
     @Time    : 2020/2/10/0018 10:02
@@ -139,16 +138,16 @@ face_counts_result = []
 
 x = 0
 # os.walk()返回结果：文件夹根路径dir_path, 文件夹名称dir_names, 文件名称file_names
-for root, dirs, frames in os.walk("C:/Users/user/PycharmProjects/PersonHJR/Resource/Video_frames"):
+for root, dirs, frames in os.walk("../Resource/Video_frames"):
     for d in dirs:
-        print(d)  # 打印子文件夹的个数
+        print(d)  # 打印子文件夹的个数(可以忽略此步骤)
+    # 循环读入每一帧
     for frame in frames:
         # 读入图像
         img_path = root + "/" + frame
         img = cv2.imread(img_path, 1)
-
         faces = model.get(img)
-
+        # 循环读取一帧当中的人脸
         for idx, face in enumerate(faces):
             # print("人脸 [%d]:" % idx)  # 人脸编号
             # print("\t 年龄:%d" % face.age)  # 年龄
@@ -180,8 +179,9 @@ for root, dirs, frames in os.walk("C:/Users/user/PycharmProjects/PersonHJR/Resou
             # face_meta_data = json.dumps(dict_face_meta)
             # indent=8 缩进，ensure_ascii=False不使用ascii编码，即可以显示中文内容
             face_meta_data = json.dumps(dict_face_meta, indent=8, ensure_ascii=False)
-            with open("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", "w", encoding="utf-8") as f:
+            with open("./faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", "w", encoding="utf-8") as f:
                 f.write(face_meta_data)
+
             # 如果视频人脸集合不为空，则计算相似度，更新视频人脸集合
             obj1_face_embedding = face.embedding
             # 如果该字典不为空
@@ -197,38 +197,103 @@ for root, dirs, frames in os.walk("C:/Users/user/PycharmProjects/PersonHJR/Resou
                     obj2_face_embedding = obj2_face_embedding_float
                     # 计算相似度
                     from numpy.linalg import norm
-
-                    sim = np.dot(obj1_face_embedding, obj2_face_embedding) / (
-                                norm(obj1_face_embedding) * norm(obj2_face_embedding))
-                    print(sim)
-                    if sim < 0.1:
+                    sim = np.dot(obj1_face_embedding, obj2_face_embedding) / (norm(obj1_face_embedding) * norm(obj2_face_embedding))
+                    # 拼接输出结果
+                    # Face1_id:dict_face_meta['face_id']
+                    # Face2_id:face_dict['face_id']
+                    print("{} 与 {}的余弦相似度为: {}".format(dict_face_meta['face_id'], face_dict['face_id'], sim))
+                    # houjingru@semptian.com 2020年2月26日
+                    # 将sim[-1， 1]归一化到[0, 1]
+                    # sim_norm = 0.5 + 0.5 * sim
+                    # print(sim_norm)
+                    if sim < 0.5:
                         # 如果小于0.5，说明不是同一个人，则需要追加此人到video_faces_result
                         # 判断video_faces_result里面是否已经有该face
-                        for x in video_faces_result:
-                            video_faces_result_tmp = []
-                            if x not in video_faces_result_tmp:
-                                video_faces_result_tmp.append(dict_face_meta)
-                        # video_faces_result_tmp.append(dict_face_meta)
+                        # 此处会重复追加元素***BUG
+                        if dict_face_meta not in video_faces_result:
+                            video_faces_result_tmp.append(dict_face_meta)
+                        # for x in video_faces_result:
+                        #     if x not in video_faces_result_tmp:
+                        #         video_faces_result_tmp.append(dict_face_meta)
+                        #         # video_faces_result_tmp.append(face_dict)
                     else:
                         # 如果大于0.5，说明是同一个人，则不需要更新video_faces_result，对同一个人进行统计
                         face_counts.append(dict_face_meta)
-                video_faces_result.extend(video_faces_result_tmp)
+
+                video_faces_result.append(video_faces_result_tmp[0])
+                # video_faces_result.append(enumerate(video_faces_result_tmp))
 
             # 如果视频人脸集合为空，直接将face0添加进去
             else:
                 video_faces_result.append(dict_face_meta)
                 # print("Video{}".format(video_faces_result))
-print("********************************************最终的人物统计结果***************************************************")
-# video_faces = []
-# for i in video_faces_result:
-#     if i not in video_faces:
-#         video_faces.append(i)
-# print(*video_faces, sep='\n')
-print(*video_faces_result, sep='\n')
 
-video_faces_result_json = json.dumps(video_faces_result, indent=8, ensure_ascii=False)
-with open("Video_faces_result.json", "w", encoding="utf-8") as f:
-    f.write(video_faces_result_json)
+print("********************************************最终的人物统计结果**************************************************")
+print(*video_faces_result, sep='\n')
+# print("********************************************最终的人物出现次数结果***********************************************")
+# print(len(face_counts)+1)
+# 保存视频人物信息-去重后的
+# video_faces_result_json = json.dumps(video_faces_result, indent=8, ensure_ascii=False)
+# with open("Video_faces_result.json", "w", encoding="utf-8") as f:
+#     f.write(video_faces_result_json)
+
+# print("***************************************根据最终的结果，在进行两两之间的相似度计算*********************************")
+# persons_result = video_faces_result
+# persons_result_tmp = video_faces_result
+#
+# length1 = len(video_faces_result)
+# length2 = len(persons_result)
+# sim_list = []
+#
+# for i in range(0, length1):
+#
+#     embedding1_float = []
+#
+#     embedding1 = video_faces_result[i]['embedding'].strip('[]').split()
+#     for index1, value1 in enumerate(embedding1):
+#         value_float1 = float(value1)
+#         embedding1_float.append(value_float1)
+#
+#     for j in range(i+1, length2):
+#         embedding2_float = []
+#         embedding2 = persons_result[j]['embedding'].strip('[]').split()
+#         for index2, value2 in enumerate(embedding2):
+#             value_float2 = float(value2)
+#             embedding2_float.append(value_float2)
+#
+#         # 两两之间计算相似度
+#         from numpy.linalg import norm
+#         sim_ = np.dot(embedding1_float, embedding2_float) / (norm(embedding1_float) * norm(embedding2_float))
+
+# length = len(video_faces_result)
+# for i in range(0, length):
+#     embedding1_float = []
+#     embedding1 = video_faces_result[i]['embedding'].strip('[]').split()
+#     for index, value in enumerate(embedding1):
+#         value_float1 = float(value)
+#         embedding1_float.append(value_float1)
+#
+#     for j in range(i+1, length):
+#         embedding2_float = []
+#         embedding2 = video_faces_result[j]['embedding'].strip('[]').split()
+#         for index, value in enumerate(embedding2):
+#             value_float2 = float(value)
+#             embedding2_float.append(value_float2)
+#
+#         # 两两之间计算相似度
+#         from numpy.linalg import norm
+#         sim_ = np.dot(embedding1_float, embedding2_float) / (norm(embedding1_float) * norm(embedding2_float))
+#
+#         if sim_ > 0.5:
+#             del persons_result[j]
+# print(*persons_result1, sep='\n')
+
+
+# obj2_face_embedding_float = []
+#                     for index, value in enumerate(faces_embedding.strip('[]').split()):
+#                         # embedding的每个值由str转化为float
+#                         item_float = float(value)
+#                         obj2_face_embedding_float.append(item_float)
 
 # face_meta_data = json.dumps(dict_face_meta, indent=8, ensure_ascii=False)
 #             with open("C:/Users/user/PycharmProjects/PersonHJR/faceAnalysis/faces_metadata/" + frame.split('.')[0] + "_" + "face" + str(idx) + ".json", "w", encoding="utf-8") as f:
