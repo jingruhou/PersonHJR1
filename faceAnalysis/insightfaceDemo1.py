@@ -159,8 +159,10 @@ for root, dirs, frames in os.walk("../Resource/Video_frames"):
                     # 计算相似度
                     from numpy.linalg import norm
                     sim = np.dot(obj1_face_embedding, obj2_face_embedding) / (norm(obj1_face_embedding) * norm(obj2_face_embedding))
-                    print("{} 与 {}的余弦相似度为: {}".format(face_dict['face_id'], dict_face_meta['face_id'], sim))
-                    if sim < 0.5:
+                    sim_norm = 0.5 + 0.5 * sim
+                    print("{} 与 {}的余弦相似度为: {}".format(face_dict['face_id'], dict_face_meta['face_id'], sim_norm))
+
+                    if sim < 0.33:
                         if dict_face_meta not in video_faces_result:
                             video_faces_result_tmp.append(dict_face_meta)
                     else:
@@ -175,3 +177,7 @@ for root, dirs, frames in os.walk("../Resource/Video_frames"):
                 video_faces_result.append(dict_face_meta)
 print("********************************************最终的人物统计结果**************************************************")
 print(*video_faces_result, sep='\n')
+
+video_faces_result_json = json.dumps(video_faces_result, indent=8, ensure_ascii=False)
+with open("Video_faces_result.json", "w", encoding="utf-8") as f:
+    f.write(video_faces_result_json)
